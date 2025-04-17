@@ -9,57 +9,61 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import todo_pb2
 import todo_pb2_grpc
 
-def generate_updates(task_ids):
-    # First need to get some task IDs to update
-    if not task_ids:
-        print("No task IDs provided. Please run the client streaming client first to add tasks.")
-        return
-    
-    # Create updates
-    updates = [
-        todo_pb2.TaskUpdate(id=task_ids[0], title="Updated grocery list"),
-        todo_pb2.TaskUpdate(id=task_ids[1], completed=True),
-        todo_pb2.TaskUpdate(id=task_ids[2], description="Updated description: Pay all bills"),
-        # Non-existent task ID to demonstrate error handling
-        todo_pb2.TaskUpdate(id="non-existent-id", title="This task doesn't exist")
-    ]
-    
-    for update in updates:
-        print(f"Sending update for task ID: {update.id}")
+def list_tasks(stub):
+    print("📋 Daftar Task:")
+    tasks = list(stub.ListTasks(todo_pb2.Empty()))
+    for task in tasks:
+        status = "✅ Selesai" if task.completed else "❌ Belum"
+        print(f"- ID: {task.id} | Judul: {task.title} | Status: {status}")
+    return tasks
+
+def input_updates(tasks):
+    print("\n🔄 Masukkan ID task yang ingin diupdate. Ketik 'done' untuk selesai.\n")
+    while True:
+        task_id = input("🆔 Task ID: ").strip()
+        if task_id.lower() == 'done':
+            break
+
+        matching = next((t for t in tasks if t.id == task_id), None)
+        if not matching:
+            print("⚠️ Task ID tidak ditemukan.")
+            continue
+
+        title = input(f"  Ubah judul (kosong = tetap): ").strip()
+        description = input(f"  Ubah deskripsi (kosong = tetap): ").strip()
+        completed_input = input(f"  Tandai selesai? (y/n/kosong): ").strip().lower()
+
+        update = todo_pb2.TaskUpdate(id=task_id)
+        if title: update.title = title
+        if description: update.description = description
+        if completed_input in ['y', 'yes']:
+            update.completed = True
+        elif completed_input in ['n', 'no']:
+            update.completed = False
+        else:
+            pass  # keep as is
+
+        print(f"📤 Mengirim update untuk task ID: {task_id}")
         yield update
-        time.sleep(1)  # Small delay to demonstrate streaming
+        time.sleep(0.5)
 
 def run():
-    # Create a gRPC channel
     with grpc.insecure_channel('localhost:50051') as channel:
-        # Create a stub (client)
         stub = todo_pb2_grpc.TodoServiceStub(channel)
-        
-        # First list all tasks to get IDs
-        print("Getting all tasks to retrieve IDs...")
-        empty = todo_pb2.Empty()
-        task_responses = stub.ListTasks(empty)
-        
-        task_ids = []
-        for task in task_responses:
-            task_ids.append(task.id)
-        
-        if not task_ids:
-            print("No tasks found. Please add some tasks first.")
+
+        tasks = list_tasks(stub)
+        if not tasks:
+            print("⚠️ Tidak ada task. Tambahkan task terlebih dahulu.")
             return
-            
-        print(f"Found {len(task_ids)} tasks.")
-        
-        print("\n=== Bidirectional Streaming RPC: Updating Tasks ===")
-        
-        # Call the bidirectional streaming RPC method
-        responses = stub.UpdateTasks(generate_updates(task_ids))
-        
-        # Process the stream of responses
-        for response in responses:
-            status = "Successful" if response.success else "Failed"
-            print(f"Update for task {response.id}: {status}")
-            print(f"Message: {response.message}")
+
+        print("\n=== 🔁 Bidirectional Streaming RPC: Update Task ===\n")
+        updates = input_updates(tasks)
+        responses = stub.UpdateTasks(updates)
+
+        print("\n📬 Respon dari Server:")
+        for res in responses:
+            status = "✅ Berhasil" if res.success else "❌ Gagal"
+            print(f"Task ID: {res.id} | Status: {status} | Pesan: {res.message}")
 
 if __name__ == '__main__':
     run()

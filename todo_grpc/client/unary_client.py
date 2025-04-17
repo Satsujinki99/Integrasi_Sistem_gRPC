@@ -9,27 +9,40 @@ import todo_pb2
 import todo_pb2_grpc
 
 def run():
-    # Create a gRPC channel
+    # Membuat channel gRPC
     with grpc.insecure_channel('localhost:50051') as channel:
-        # Create a stub (client)
         stub = todo_pb2_grpc.TodoServiceStub(channel)
-        
-        print("=== Unary RPC: Adding a Task ===")
-        
-        # Create a task
+
+        print("=== 🔨 Tambah Task Baru (Unary RPC) ===")
+
+        # Input manual dari user
+        title = input("📝 Judul Task        : ").strip()
+        description = input("📄 Deskripsi Task    : ").strip()
+        completed_input = input("✅ Sudah selesai? (y/n): ").strip().lower()
+
+        # Validasi
+        if not title:
+            print("❌ Judul tidak boleh kosong!")
+            return
+
+        completed = completed_input in ['y', 'yes']
+
+        # Buat objek task
         task = todo_pb2.Task(
-            id="",  # Server will generate ID
-            title="Complete gRPC assignment",
-            description="Implement a To-Do list using gRPC's four communication patterns",
-            completed=False
+            title=title,
+            description=description,
+            completed=completed
         )
-        
-        # Call the unary RPC method
-        response = stub.AddTask(task)
-        
-        print(f"Response: {response.message}")
-        print(f"Task ID: {response.task_id}")
-        print(f"Success: {response.success}")
+
+        try:
+            # Panggil RPC
+            response = stub.AddTask(task)
+            print("\n📬 Respon dari Server:")
+            print(f"🆔 ID      : {response.task_id}")
+            print(f"📢 Pesan   : {response.message}")
+            print(f"✅ Success : {response.success}")
+        except grpc.RpcError as e:
+            print(f"❌ Gagal menambahkan task: {e.details()}")
 
 if __name__ == '__main__':
     run()

@@ -8,32 +8,42 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import todo_pb2
 import todo_pb2_grpc
 
-def generate_tasks():
-    tasks = [
-        todo_pb2.Task(title="Buy groceries", description="Milk, eggs, bread", completed=False),
-        todo_pb2.Task(title="Call doctor", description="Schedule annual checkup", completed=False),
-        todo_pb2.Task(title="Pay utility bills", description="Electricity and water", completed=False),
-        todo_pb2.Task(title="Fix bicycle", description="Replace the flat tire", completed=False)
-    ]
-    
-    for task in tasks:
-        print(f"Sending task: {task.title}")
+def generate_tasks_from_input():
+    print("Masukkan task satu per satu. Ketik 'done' untuk selesai.\n")
+
+    while True:
+        title = input("📝 Judul task (atau 'done'): ").strip()
+        if title.lower() == 'done':
+            break
+
+        description = input("📄 Deskripsi: ").strip()
+        completed_input = input("✅ Sudah selesai? (y/n): ").strip().lower()
+        completed = completed_input in ['y', 'yes']
+
+        task = todo_pb2.Task(
+            title=title,
+            description=description,
+            completed=completed
+        )
+
+        print(f"📤 Mengirim task: '{title}'\n")
         yield task
 
 def run():
-    # Create a gRPC channel
-    with grpc.insecure_channel('localhost:50051') as channel:
-        # Create a stub (client)
-        stub = todo_pb2_grpc.TodoServiceStub(channel)
-        
-        print("=== Client Streaming RPC: Adding Multiple Tasks ===")
-        
-        # Call the client streaming RPC method
-        response = stub.AddMultipleTasks(generate_tasks())
-        
-        print(f"Response: {response.message}")
-        print(f"Added tasks count: {response.added_count}")
-        print(f"Task IDs: {', '.join(response.task_ids)}")
+    print("=== 🛰️  Client Streaming RPC: Tambah Task Manual ===\n")
+    
+    try:
+        with grpc.insecure_channel('localhost:50051') as channel:
+            stub = todo_pb2_grpc.TodoServiceStub(channel)
+            response = stub.AddMultipleTasks(generate_tasks_from_input())
+
+            print("\n✅ Respon dari Server:")
+            print(f"Pesan         : {response.message}")
+            print(f"Jumlah Ditambah: {response.added_count}")
+            print(f"Task IDs      : {', '.join(response.task_ids)}")
+
+    except grpc.RpcError as e:
+        print(f"❌ gRPC Error: {e.code()} - {e.details()}")
 
 if __name__ == '__main__':
     run()
